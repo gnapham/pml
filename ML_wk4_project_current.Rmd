@@ -79,7 +79,7 @@ heatmap(M)
 
 
 ## Train Naive Bayes model w/ 5-fold cross validation
-Naive Bayes trains the model quickly, but has low prediction accuracy of 0.7176.
+Naive Bayes trains the model quickly, but has low prediction accuracy of 0.7176. In this model, the predictors are assumed to be independent of one another. This may explain the somewhat low accuracy as evidenced by high out-of-sample errors.
 ```{r echo = T}
 ctrlTrain <- trainControl(method="cv", number=5, verboseIter=FALSE)
 modFit1 <- train(classe ~ ., data = trainData, method = "naive_bayes", trControl = ctrlTrain)
@@ -89,7 +89,7 @@ confusionMatrix(nb_predictions, testData$classe %>% as.factor)
 ```
 
 ## Train RF model w/ 5-fold cross validation
-Random forest shows the best accuracy, though fitting the model is the slowest. (Code has been commented out to save time on re-running the model for report generation)
+Random forest shows the best accuracy, though fitting the model is the slowest. (Code has been commented out to save time on re-running the model for report generation). In this case, the proximity matrix is assumed to be symmetrical.
 ```{r eval=F, echo = T}
 # modFit2 <- train(classe ~ ., data = trainData, method = "rf", trControl = ctrlTrain, prox = TRUE)
 # summary(modFit2$finalModel)
@@ -114,7 +114,7 @@ rForestCM$table %>%
 ```
 
 ## Train random ferns model w/ 5-fold cross validations
-Random ferns fits a model relatively quickly and is slightly more inaccurate than random forest.
+Random ferns fits a model relatively quickly and is slightly more inaccurate than random forest. Random ferns, as written in its original publication (https://arxiv.org/pdf/1202.1121.pdf) for implementation as a decision tree ensemble, is an extension of the naive bayes classifier.
 ```{r echo = T}
 # modFit3 <- train(classe ~ ., data = trainData, method = "rFerns", trControl = ctrlTrain)
 # summary(modFit3$finalModel)
@@ -133,7 +133,7 @@ rfernsCM$table %>%
 Creating an ensemble model of random ferns and naive bayes is actually worse than using the random ferns model alone.
 ```{r echo = T}
 # predDF <- data.frame(predictionsRFerns, nb_predictions, classe = testData$classe)
-# combModFit <- train(classe ~ ., method = "rFerns", data = predDF)
+# combModFit <- train(classe ~ ., method = "rFerns", data = predDF) 
 # combPred <- predict(combModFit, predDF)
 
 confusionMatrix(combPred, as.factor(testData$classe))
