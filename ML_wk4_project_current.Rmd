@@ -1,0 +1,155 @@
+---
+title: "Practical Machine Learning"
+author: "Gina Pham"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Read Data
+Read data from the PML course into memory.
+
+```{r echo = T, warning=F, error=F, results='hide'}
+setwd("/Users/gpham/OneDrive - Pairwise Plants, LLC/Data Science/Practical Machine Learning/")
+
+library(dplyr)
+library(caret)
+library(tidyverse)
+
+train <- read_csv("pml-training.csv")
+test <- read_csv("pml-testing.csv")
+```
+
+## Clean data to remove NAs
+There are several columns containing missing data. This section removes the columns. This leaves 60 columns in train_clean with 19,622 measurements.
+```{r echo = T}
+
+train_clean <- train[,!(apply(train, 2, is.na) %>% 
+                          colSums != 0)]
+
+test_clean <- test[,!(apply(test, 2, is.na) %>% 
+                        colSums !=0)]
+
+dim(train_clean)
+
+```
+
+
+## Remove metadata that are not predictors
+Removing some uninformative values in the matrix further reduces the number of columns to 53.
+```{r echo = T}
+train_clean <- train_clean[-c(1:7)]
+
+test_clean <- test_clean[-c(1:7)]
+```
+
+
+## Create training and testing data sets from train set
+This section partitions the data and uses 75% for training.
+```{r echo = T}
+set.seed(13245)
+inTrain <- createDataPartition(y = train_clean$classe,
+                               p = 0.75,
+                               list = FALSE)
+trainData <- train_clean[inTrain,]
+testData <- train_clean[-inTrain,]
+```
+
+
+## Explore the data to check for highly correlated variables
+This section finds predictors with an R-squared of at least 80%. Because there are some correlated variables, PCA could be used to reduce the dimensions. I have proceeded without pre-processing and will use all the data in the models.
+```{r echo = T}
+# find pairs of predictors with correlation of at least 0.8.
+M <- abs(cor(trainData[,-46]))
+diag(M) <- 0
+which(M > 0.8, arr.ind = TRUE)
+
+# example of correlated values for gyros_forearm_y and gyros_forearm_z
+plot(trainData[,38:39], ylim = c(0,3), xlim = c(0,7))
+
+```
+
+
+This figure shows a summary of correlated predictors. The 'gyros_dumbbell' values show particularly strong correlation.
+```{r echo = T}
+heatmap(M)
+```
+
+
+## Train Naive Bayes model w/ 5-fold cross validation
+Naive Bayes trains the model quickly, but has low prediction accuracy of 0.7176.
+```{r echo = T}
+ctrlTrain <- trainControl(method="cv", number=5, verboseIter=FALSE)
+modFit1 <- train(classe ~ ., data = trainData, method = "naive_bayes", trControl = ctrlTrain)
+summary(modFit1$finalModel)
+nb_predictions <- predict(object = modFit1, newdata = testData)
+confusionMatrix(nb_predictions, testData$classe %>% as.factor)
+```
+
+## Train RF model w/ 5-fold cross validation
+Random forest shows the best accuracy, though fitting the model is the slowest. (Code has been commented out to save time on re-running the model for report generation)
+```{r eval=F, echo = T}
+# modFit2 <- train(classe ~ ., data = trainData, method = "rf", trControl = ctrlTrain, prox = TRUE)
+# summary(modFit2$finalModel)
+# predictionsRF <- predict(object = modFit2, newdata = testData)
+# confusionMatrix(predictionsRF, testData$classe %>% as.factor)
+```
+
+```{r}
+# modFit2 <- train(classe ~ ., data = trainData, method = "rf", trControl = ctrlTrain, prox = TRUE)
+# summary(modFit2$finalModel)
+# predictionsRF <- predict(object = modFit2, newdata = testData)
+confusionMatrix(predictionsRF, testData$classe %>% as.factor)
+```
+
+Random forest shows high prediction accuracy for all five outcomes:
+```{r echo = T}
+rForestCM <- confusionMatrix(predictionsRF, testData$classe %>% as.factor)
+
+rForestCM$table %>%
+  plot
+
+```
+
+## Train random ferns model w/ 5-fold cross validations
+Random ferns fits a model relatively quickly and is slightly more inaccurate than random forest.
+```{r echo = T}
+# modFit3 <- train(classe ~ ., data = trainData, method = "rFerns", trControl = ctrlTrain)
+# summary(modFit3$finalModel)
+# predictionsRFerns <- predict(object = modFit3, newdata = testData)
+confusionMatrix(predictionsRFerns, testData$classe %>% as.factor)
+```
+
+```{r echo = T}
+rfernsCM <- confusionMatrix(predictionsRFerns, testData$classe %>% as.factor)
+
+rfernsCM$table %>%
+  plot
+```
+
+## Fit a model that combines random ferns and Naive Bayes 
+Creating an ensemble model of random ferns and naive bayes is actually worse than using the random ferns model alone.
+```{r echo = T}
+# predDF <- data.frame(predictionsRFerns, nb_predictions, classe = testData$classe)
+# combModFit <- train(classe ~ ., method = "rFerns", data = predDF)
+# combPred <- predict(combModFit, predDF)
+
+confusionMatrix(combPred, as.factor(testData$classe))
+
+```
+
+## Further evaluation of the importance of variables in the random forest
+Because the random forest model was the most accurate, we can do further evaluation to understand the importance assigned to each value in predicting the correct outcomes. This shows that roll_belt is an excellent predictor.
+
+```{r}
+rfVarImp <- varImp(modFit2)
+rfVarImpDF <- rfVarImp$importance
+rfVarImpDF <- mutate(rfVarImpDF, var = rownames(rfVarImpDF))
+
+rfVarImp
+
+plot(rfVarImp)
+
+```
